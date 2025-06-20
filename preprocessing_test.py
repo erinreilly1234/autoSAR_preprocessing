@@ -24,74 +24,95 @@ def apply_multilook(product, rg_looks=2, az_looks=2):
     return GPF.createProduct('Multilook', params, product)
 
 def add_incang_band(product):
-    width = product.getSceneRasterWidth()
-    height = product.getSceneRasterHeight()
+    print("📡 Creating and merging 'incang' band from 'incident_angle'...")
 
-    print("Available tie-point grids:")
-    for i in range(product.getNumTiePointGrids()):
-        print(" -", product.getTiePointGridAt(i).getName())
+    tie_grids = [product.getTiePointGridAt(i).getName() for i in range(product.getNumTiePointGrids())]
+    if 'incident_angle' not in tie_grids:
+        raise RuntimeError("❌ 'incident_angle' tie-point grid not found.")
 
-    tie_grid = product.getTiePointGrid('incident_angle')
-    if tie_grid is None:
-        raise RuntimeError("❌ 'incident_angle' tie-point grid not found in the product.")
+    # Step 1: Build a new product with only the incang band
+    HashMap = jpy.get_type('java.util.HashMap')
+    BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+    band_array = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
 
-    ProductData = jpy.get_type('org.esa.snap.core.datamodel.ProductData')
-    Band = jpy.get_type('org.esa.snap.core.datamodel.Band')
+    descriptor = BandDescriptor()
+    descriptor.name = 'incang'
+    descriptor.type = 'float32'
+    descriptor.expression = 'incident_angle'
+    band_array[0] = descriptor
 
-    incang_band = Band('incang', ProductData.TYPE_FLOAT32, width, height)
-    product.addBand(incang_band)
+    params = HashMap()
+    params.put('targetBands', band_array)
+    params.put('retainExistingBands', False)  # Only generate incang
+    incang_product = GPF.createProduct('BandMaths', params, product)
 
-    incang_data = incang_band.createCompatibleRasterData()
-    for y in range(height):
-        for x in range(width):
-            value = tie_grid.getPixelFloat(x, y)
-            incang_data.setElemFloatAt(y * width + x, value)
-    incang_band.setRasterData(incang_data)
+    # Step 2: Merge incang into original product
+    merge_params = HashMap()
+    merge_params.put('sourceProductNames', 'master,slave')
+    merge_params.put('resamplingMethod', 'NEAREST_NEIGHBOUR')
+    merge_params.put('geodeticTiePoints', True)
 
-# Optional: Disabled for now due to runtime issues
-"""
+    sources = HashMap()
+    sources.put('master', product)
+    sources.put('slave', incang_product)
+
+    merged = GPF.createProduct('BandMerge', merge_params, sources)
+
+    print("✅ 'incang' band merged with original product.")
+    return merged
+
+
 def ellipsoid_correction(product, proj='WGS84(DD)'):
     print("\t🌍 Applying Ellipsoid Correction (Generic Geocoding)...")
-    band_names = product.getBandNames()
-    bands = ",".join(band_names)
+    band_names = list(product.getBandNames())  # Convert Java array to Python list
+    print("✅ Bands to geocode:", band_names)
+
     params = HashMap()
-    params.put('sourceBands', bands)
+    params.put('sourceBands', ",".join(band_names))
     params.put('imgResamplingMethod', 'BILINEAR_INTERPOLATION')
     params.put('mapProjection', proj)
-    return GPF.createProduct('Ellipsoid-Correction-GG', params, product)
-"""
 
-def write_product(product, output_path):
-    ProductIO.writeProduct(product, output_path, 'BEAM-DIMAP')
+    return GPF.createProduct('Ellipsoid-Correction-GG', params, product)
+
+def write_product(product, output_path, format='BEAM-DIMAP'):
+    ProductIO.writeProduct(product, output_path, format)
 
 def main():
     initialize_snap()
 
+    # Paths
     input_path = r'/Volumes/External/TJ_estuary/01_data/sentinel_1/01_JunethroughDec/S1A_IW_GRDH_1SDV_20240602T134457_20240602T134522_054145_069598_F5E2.zip'
-    output_path = '/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output/cal_ml_incang_no_geocoding.dim'
+    temp_path = '/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output/intermediate_with_incang'
+    final_path = '/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output/final_geocoded_output'
 
-    print("📥 Loading product...")
+    # === STAGE 1: Preprocessing and save ===
+    print("- Loading product...")
     product = load_product(input_path)
 
-    print("⚙️  Calibrating...")
+    print("️-  Calibrating...")
     calibrated = calibrate_product(product)
     ProductUtils.copyTiePointGrids(product, calibrated)
 
-    print("🌀 Applying multilook...")
+    print("- Applying multilook...")
     multilooked = apply_multilook(calibrated)
 
-    print("📡 Adding incident angle band...")
-    add_incang_band(multilooked)
+    print("- Adding 'incang' band...")
+    multilooked = add_incang_band(multilooked)
 
-    # Temporarily skip geocoding step
-    print("⚠️  Ellipsoid correction is currently disabled. Output is not geocoded.")
-    geocoded = multilooked  # Bypass geocoding for now
+    print(f"- Saving intermediate product to {temp_path}.dim ...")
+    write_product(multilooked, temp_path)
 
-    print("💾 Writing output...")
-    write_product(geocoded, output_path)
+    # === STAGE 2: Reload and geocode ===
+    print("- Reloading product with incang band...")
+    reloaded = load_product(temp_path + '.dim')
 
-    print("✅ Processing complete. Output saved at:")
-    print(output_path)
+    print("-  Geocoding using Ellipsoid-Correction-GG...")
+    geocoded = ellipsoid_correction(reloaded)
+
+    print(f"- Writing final geocoded output to {final_path}.dim ...")
+    write_product(geocoded, final_path)
+
+    print("✅ Done!")
 
 if __name__ == '__main__':
     main()
