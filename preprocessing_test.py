@@ -24,11 +24,11 @@ def apply_multilook(product, rg_looks=2, az_looks=2):
     return GPF.createProduct('Multilook', params, product)
 
 def add_incang_band(product):
-    print("📡 Creating and merging 'incang' band from 'incident_angle'...")
+    print(" Creating and merging 'incang' band from 'incident_angle'...")
 
     tie_grids = [product.getTiePointGridAt(i).getName() for i in range(product.getNumTiePointGrids())]
     if 'incident_angle' not in tie_grids:
-        raise RuntimeError("❌ 'incident_angle' tie-point grid not found.")
+        raise RuntimeError("**** 'incident_angle' tie-point grid not found.****")
 
     # Step 1: Build a new product with only the incang band
     HashMap = jpy.get_type('java.util.HashMap')
@@ -58,13 +58,13 @@ def add_incang_band(product):
 
     merged = GPF.createProduct('BandMerge', merge_params, sources)
 
-    print("✅ 'incang' band merged with original product.")
+    print("-- 'incang' band merged with original product.")
     return merged
 
 def ellipsoid_correction(product, proj='WGS84(DD)'):
-    print("\t🌍 Applying Ellipsoid Correction (Generic Geocoding)...")
+    print("\t Applying Ellipsoid Correction (Generic Geocoding)...")
     band_names = list(product.getBandNames())  # Convert Java array to Python list
-    print("✅ Bands to geocode:", band_names)
+    print("--- Bands to geocode:", band_names)
 
     params = HashMap()
     params.put('sourceBands', ",".join(band_names))
@@ -87,7 +87,7 @@ def apply_land_sea_mask(product):
     return GPF.createProduct('Land-Sea-Mask', params, product)
 
 def subset_to_aoi(product, wkt_string):
-    print("📦 Subsetting to AOI using WKT...")
+    print(" Subsetting to AOI using WKT...")
 
     HashMap = jpy.get_type('java.util.HashMap')
     params = HashMap()
