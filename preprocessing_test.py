@@ -61,7 +61,6 @@ def add_incang_band(product):
     print("✅ 'incang' band merged with original product.")
     return merged
 
-
 def ellipsoid_correction(product, proj='WGS84(DD)'):
     print("\t🌍 Applying Ellipsoid Correction (Generic Geocoding)...")
     band_names = list(product.getBandNames())  # Convert Java array to Python list
@@ -74,6 +73,30 @@ def ellipsoid_correction(product, proj='WGS84(DD)'):
 
     return GPF.createProduct('Ellipsoid-Correction-GG', params, product)
 
+def apply_land_sea_mask(product):
+    print(" Applying Land-Sea Mask...")
+
+    HashMap = jpy.get_type('java.util.HashMap')
+    params = HashMap()
+    params.put('landMask', True)
+    params.put('useSRTM', True)
+    JInteger = jpy.get_type('java.lang.Integer')
+    params.put('shorelineExtension', JInteger(2))
+    # Optional: use 'sourceBands' or 'geometry' if needed
+
+    return GPF.createProduct('Land-Sea-Mask', params, product)
+
+def subset_to_aoi(product, wkt_string):
+    print("📦 Subsetting to AOI using WKT...")
+
+    HashMap = jpy.get_type('java.util.HashMap')
+    params = HashMap()
+    params.put('geoRegion', wkt_string)
+    params.put('copyMetadata', True)
+    return GPF.createProduct('Subset', params, product)
+
+
+
 def write_product(product, output_path, format='BEAM-DIMAP'):
     ProductIO.writeProduct(product, output_path, format)
 
@@ -84,6 +107,7 @@ def main():
     input_path = r'/Volumes/External/TJ_estuary/01_data/sentinel_1/01_JunethroughDec/S1A_IW_GRDH_1SDV_20240602T134457_20240602T134522_054145_069598_F5E2.zip'
     temp_path = '/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output/intermediate_with_incang'
     final_path = '/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output/final_geocoded_output'
+    wkt_aoi = "POLYGON ((-117.339478 32.328917, -117.051086 32.328917, -117.051086 32.644, -117.339478 32.644, -117.339478 32.328917))"
 
     # === STAGE 1: Preprocessing and save ===
     print("- Loading product...")
@@ -109,10 +133,16 @@ def main():
     print("-  Geocoding using Ellipsoid-Correction-GG...")
     geocoded = ellipsoid_correction(reloaded)
 
-    print(f"- Writing final geocoded output to {final_path}.dim ...")
-    write_product(geocoded, final_path)
+    print("- Masking land areas using Land-Sea Mask...")
+    masked = apply_land_sea_mask(geocoded)
 
-    print("✅ Done!")
+    print("- Subsetting to area of interest (AOI)...")
+    subset = subset_to_aoi(masked, wkt_aoi)
+
+    print(f"- Writing final clipped output to {final_path}_masked_subset.dim ...")
+    write_product(subset, final_path + '_masked_subset')
+
+    print("----- Done! Have a great day! ------")
 
 if __name__ == '__main__':
     main()
