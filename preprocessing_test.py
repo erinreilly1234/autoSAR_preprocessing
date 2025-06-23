@@ -1,4 +1,5 @@
 from esa_snappy import ProductIO, GPF, HashMap, jpy, ProductUtils
+import os
 
 def initialize_snap():
     GPF.getDefaultInstance().getOperatorSpiRegistry().loadOperatorSpis()
@@ -24,13 +25,12 @@ def apply_multilook(product, rg_looks=2, az_looks=2):
     return GPF.createProduct('Multilook', params, product)
 
 def add_incang_band(product):
-    print(" Creating and merging 'incang' band from 'incident_angle'...")
+    print("Adding 'incang' band from 'incident_angle'...")
 
     tie_grids = [product.getTiePointGridAt(i).getName() for i in range(product.getNumTiePointGrids())]
     if 'incident_angle' not in tie_grids:
-        raise RuntimeError("**** 'incident_angle' tie-point grid not found.****")
+        raise RuntimeError("'incident_angle' tie-point grid not found.")
 
-    # Step 1: Build a new product with only the incang band
     HashMap = jpy.get_type('java.util.HashMap')
     BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
     band_array = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
@@ -43,10 +43,10 @@ def add_incang_band(product):
 
     params = HashMap()
     params.put('targetBands', band_array)
-    params.put('retainExistingBands', False)  # Only generate incang
+    params.put('retainExistingBands', False)
+
     incang_product = GPF.createProduct('BandMaths', params, product)
 
-    # Step 2: Merge incang into original product
     merge_params = HashMap()
     merge_params.put('sourceProductNames', 'master,slave')
     merge_params.put('resamplingMethod', 'NEAREST_NEIGHBOUR')
@@ -57,14 +57,14 @@ def add_incang_band(product):
     sources.put('slave', incang_product)
 
     merged = GPF.createProduct('BandMerge', merge_params, sources)
-
-    print("-- 'incang' band merged with original product.")
+    print("'incang' band successfully merged.")
     return merged
 
 def ellipsoid_correction(product, proj='WGS84(DD)'):
-    print("\t Applying Ellipsoid Correction (Generic Geocoding)...")
-    band_names = list(product.getBandNames())  # Convert Java array to Python list
-    print("--- Bands to geocode:", band_names)
+    print("Applying ellipsoid-based geocoding...")
+
+    band_names = list(product.getBandNames())
+    print("Bands to geocode:", band_names)
 
     params = HashMap()
     params.put('sourceBands', ",".join(band_names))
@@ -74,75 +74,105 @@ def ellipsoid_correction(product, proj='WGS84(DD)'):
     return GPF.createProduct('Ellipsoid-Correction-GG', params, product)
 
 def apply_land_sea_mask(product):
-    print(" Applying Land-Sea Mask...")
+    print("Applying Land-Sea Mask...")
 
     HashMap = jpy.get_type('java.util.HashMap')
+    JInteger = jpy.get_type('java.lang.Integer')
+
     params = HashMap()
     params.put('landMask', True)
     params.put('useSRTM', True)
-    JInteger = jpy.get_type('java.lang.Integer')
     params.put('shorelineExtension', JInteger(2))
-    # Optional: use 'sourceBands' or 'geometry' if needed
 
     return GPF.createProduct('Land-Sea-Mask', params, product)
 
 def subset_to_aoi(product, wkt_string):
-    print(" Subsetting to AOI using WKT...")
+    print("Subsetting to AOI...")
 
     HashMap = jpy.get_type('java.util.HashMap')
     params = HashMap()
     params.put('geoRegion', wkt_string)
     params.put('copyMetadata', True)
+
     return GPF.createProduct('Subset', params, product)
 
+def reorder_bands_explicitly(product, output_band_order):
+    print("Rebuilding product to enforce band order:", output_band_order)
+
+    ProductData = jpy.get_type('org.esa.snap.core.datamodel.ProductData')
+    BandType = jpy.get_type('org.esa.snap.core.datamodel.Band')
+    Product = jpy.get_type('org.esa.snap.core.datamodel.Product')
+    ProductUtils = jpy.get_type('org.esa.snap.core.util.ProductUtils')
+
+    width = product.getSceneRasterWidth()
+    height = product.getSceneRasterHeight()
+
+    new_product = Product("OrderedProduct", "GeoTIFF", width, height)
+
+    ProductUtils.copyGeoCoding(product, new_product)
+    ProductUtils.copyMetadata(product, new_product)
+    ProductUtils.copyTiePointGrids(product, new_product)
+
+    for band_name in output_band_order:
+        source_band = product.getBand(band_name)
+        band_type = source_band.getDataType()
+
+        new_band = BandType(band_name, band_type, width, height)
+        new_product.addBand(new_band)
+
+        # Read and assign raster data
+        source_pixels = source_band.readPixels(0, 0, width, height, jpy.array('float', width * height))
+        raster = ProductData.createInstance(ProductData.TYPE_FLOAT32, width * height)
+        for i in range(len(source_pixels)):
+            raster.setElemFloatAt(i, source_pixels[i])
+        new_band.setRasterData(raster)
+
+    return new_product
 
 
-def write_product(product, output_path, format='BEAM-DIMAP'):
+def write_product(product, output_path, format='GeoTIFF'):
     ProductIO.writeProduct(product, output_path, format)
 
 def main():
     initialize_snap()
 
-    # Paths
     input_path = r'/Volumes/External/TJ_estuary/01_data/sentinel_1/01_JunethroughDec/S1A_IW_GRDH_1SDV_20240602T134457_20240602T134522_054145_069598_F5E2.zip'
-    temp_path = '/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output/intermediate_with_incang'
-    final_path = '/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output/final_geocoded_output'
-    wkt_aoi = "POLYGON ((-117.339478 32.328917, -117.051086 32.328917, -117.051086 32.644, -117.339478 32.644, -117.339478 32.328917))"
 
-    # === STAGE 1: Preprocessing and save ===
-    print("- Loading product...")
+    # Derive filename
+    input_filename = os.path.basename(input_path)
+    basename = os.path.splitext(input_filename)[0]
+    output_path = f"/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output/{basename}_pre.tif"
+
+    print("Loading product...")
     product = load_product(input_path)
 
-    print("️-  Calibrating...")
+    print("Calibrating...")
     calibrated = calibrate_product(product)
     ProductUtils.copyTiePointGrids(product, calibrated)
 
-    print("- Applying multilook...")
+    print("Applying multilook...")
     multilooked = apply_multilook(calibrated)
 
-    print("- Adding 'incang' band...")
+    print("Adding incang band...")
     multilooked = add_incang_band(multilooked)
 
-    print(f"- Saving intermediate product to {temp_path}.dim ...")
-    write_product(multilooked, temp_path)
+    print("Geocoding...")
+    geocoded = ellipsoid_correction(multilooked)
 
-    # === STAGE 2: Reload and geocode ===
-    print("- Reloading product with incang band...")
-    reloaded = load_product(temp_path + '.dim')
-
-    print("-  Geocoding using Ellipsoid-Correction-GG...")
-    geocoded = ellipsoid_correction(reloaded)
-
-    print("- Masking land areas using Land-Sea Mask...")
+    print("Applying land-sea mask...")
     masked = apply_land_sea_mask(geocoded)
 
-    print("- Subsetting to area of interest (AOI)...")
+    print("Subsetting to AOI...")
+    wkt_aoi = "POLYGON ((-117.25708 32.314991, -117.04834 32.314991, -117.04834 32.655563, -117.25708 32.655563, -117.25708 32.314991))"
     subset = subset_to_aoi(masked, wkt_aoi)
 
-    print(f"- Writing final clipped output to {final_path}_masked_subset.dim ...")
-    write_product(subset, final_path + '_masked_subset')
+    print("Reordering bands...")
+    ordered = reorder_bands_explicitly(subset, ['Sigma0_VV', 'incang'])
 
-    print("----- Done! Have a great day! ------")
+    print("Writing GeoTIFF output...")
+    write_product(ordered, output_path)
+
+    print("Processing complete.")
 
 if __name__ == '__main__':
     main()
