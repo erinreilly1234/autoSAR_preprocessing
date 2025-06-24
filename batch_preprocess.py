@@ -1,5 +1,9 @@
 from esa_snappy import ProductIO, GPF, HashMap, jpy, ProductUtils
 import os
+import rasterio
+from rasterio import features  # <-- this is the missing import
+import geopandas as gpd
+import numpy as np
 
 # --- SNAP Workflow Functions ---
 def initialize_snap():
@@ -98,6 +102,8 @@ def reorder_bands_explicitly(product, output_band_order):
 
     for band_name in output_band_order:
         source_band = product.getBand(band_name)
+        if source_band is None:
+            raise ValueError(f"Band '{band_name}' not found in product.")
         band_type = source_band.getDataType()
         new_band = BandType(band_name, band_type, width, height)
         new_product.addBand(new_band)
@@ -109,6 +115,32 @@ def reorder_bands_explicitly(product, output_band_order):
         new_band.setRasterData(raster)
 
     return new_product
+
+def mask_raster_with_shapefile(raster_path, shapefile_path, output_path):
+    """
+    Masks all pixels inside the shapefile geometry in the raster and sets them to nodata.
+    """
+    gdf = gpd.read_file(shapefile_path)
+    gdf = gdf.to_crs(epsg=4326)  # Adjust CRS if needed
+
+    with rasterio.open(raster_path) as src:
+        out_meta = src.meta.copy()
+        out_image = src.read()
+
+        mask = features.geometry_mask(
+            [geom for geom in gdf.geometry],
+            out_shape=(src.height, src.width),
+            transform=src.transform,
+            invert=True
+        )
+
+        for i in range(out_image.shape[0]):
+            out_image[i, mask] = src.nodata if src.nodata is not None else 0
+
+    with rasterio.open(output_path, "w", **out_meta) as dest:
+        dest.write(out_image)
+
+    print(f"Masked raster saved to: {output_path}")
 
 def write_product(product, output_path, format='GeoTIFF'):
     ProductIO.writeProduct(product, output_path, format)
@@ -123,19 +155,34 @@ def process_scene(input_path, output_path):
     geocoded = ellipsoid_correction(multilooked)
     masked = apply_land_sea_mask(geocoded)
 
-    wkt_aoi = "POLYGON ((-117.25708 32.314991, -117.04834 32.314991, -117.04834 32.655563, -117.25708 32.655563, -117.25708 32.314991))"
+    wkt_aoi = "POLYGON ((-117.171936 32.379961, -117.055206 32.379961, -117.055206 32.638218, -117.171936 32.638218, -117.171936 32.379961)))"
     subset = subset_to_aoi(masked, wkt_aoi)
+
     ordered = reorder_bands_explicitly(subset, ['Sigma0_VV', 'incang'])
-    write_product(ordered, output_path)
-    print("Done.")
+    # Write to a temporary path for masking
+    temp_output_path = "/tmp/temp_output.tif"  # or use tempfile.NamedTemporaryFile()
+
+    print("Writing temporary GeoTIFF for masking...")
+    write_product(ordered, temp_output_path)
+
+    masked_output_path = f"/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output/{basename}_pre.tif"
+    print("Masking with shapefile...")
+    mask_raster_with_shapefile(temp_output_path, shapefile_path, masked_output_path)
+
+    # Optionally delete the temp file if desired
+    if os.path.exists(temp_output_path):
+        os.remove(temp_output_path)
+    print("Process complete.")
 
 # --- Batch Loop ---
-input_folder = r'/Volumes/External/TJ_estuary/01_data/sentinel_1/01_JunethroughDec'
-output_folder = r'/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output'
+input_folder = '/Volumes/External/TJ_estuary/01_data/sentinel_1/01_JunethroughDec'
+output_folder = '/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output'
+shapefile_path = '/Volumes/External/TJ_estuary/visualization/SARplume/_data/SanDiegoBay.shp'
 
 if __name__ == '__main__':
     initialize_snap()
     zip_files = [f for f in os.listdir(input_folder) if f.endswith('.zip') and not f.startswith('._')]
+    print(f"Found {len(zip_files)} zip files to process.")
 
     for fname in zip_files:
         input_path = os.path.join(input_folder, fname)
