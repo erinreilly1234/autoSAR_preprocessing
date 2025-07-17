@@ -1,19 +1,40 @@
-### RUN IN SNAPPY ENV
-
-from esa_snappy import ProductIO, GPF, HashMap, jpy, ProductUtils
+#!/usr/bin/env python3
+"""
+Process Sentinel-1 SAR scenes using SNAP (snappy) with JVM heap tuning.
+Supports two modes:
+  1) Batch mode (no args): iterates through all ZIPs in `input_folder`, spawning a separate Python/JVM process for each.
+  2) Single mode (one arg): processes the given ZIP.
+"""
+from esa_snappy import jpy, ProductIO, GPF, HashMap, ProductUtils
 import os
+import sys
+import subprocess
 import math
 import rasterio
 from rasterio import features
 import geopandas as gpd
 import numpy as np
 from scipy.ndimage import distance_transform_edt
+import zipfile
+
+# --- JVM heap settings (must be before any SNAP imports) ---
+try:
+    jpy.create_jvm([
+        "-Xms1g",            # initial heap size 1 GB
+        "-Xmx12g",           # maximum heap size 12 GB
+        "-Djava.awt.headless=true"
+    ])
+except Exception:
+    # JVM already started
+    pass
 
 # --- Configuration ---
 input_folder       = '/Volumes/External/TJ_SAR/01_data/02_2025_2020'
-output_folder      = '/Volumes/External/TJ_SAR/02_preprocessed/TJNERR_20202025'
+output_folder      = '/Volumes/External/TJ_SAR/02_preprocessed/PB_20222025'
 shapefile_path     = '/Volumes/External/TJ_SAR/01_data/shapefiles/SanDiegoBay.shp'
-wkt = "POLYGON ((-117.16198 32.503682, -117.117004 32.503682, -117.117004 32.584717, -117.16198 32.584717, -117.16198 32.503682))"
+wkt = (
+    "POLYGON ((-117.15889 32.376482, -117.078552 32.376482, -117.078552 32.503971, -117.15889 32.503971, -117.15889 32.376482)))"
+)
 distance_threshold = 4000  # meters from any shoreline
 
 # --- SNAP Workflow ---
@@ -40,10 +61,15 @@ def apply_multilook(product, rg_looks=2, az_looks=2):
     params.put('outputIntensity', True)
     return GPF.createProduct('Multilook', params, product)
 
+# --- Original BandMerge with corrected incang band ---
 def add_incang_band(product):
-    HashMapType   = jpy.get_type('java.util.HashMap')
-    BandDescriptor= jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
-    band_array    = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+    HashMapType    = jpy.get_type('java.util.HashMap')
+    BandDescriptor = jpy.get_type(
+        'org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor'
+    )
+    band_array = jpy.array(
+        'org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1
+    )
     desc = BandDescriptor()
     desc.name       = 'incang'
     desc.type       = 'float32'
@@ -57,9 +83,12 @@ def add_incang_band(product):
     merge_params.put('sourceProductNames', 'master,slave')
     merge_params.put('resamplingMethod', 'NEAREST_NEIGHBOUR')
     merge_params.put('geodeticTiePoints', True)
-    sources = HashMapType(); sources.put('master', product); sources.put('slave', incang)
+    sources = HashMapType()
+    sources.put('master', product)
+    sources.put('slave', incang)
     return GPF.createProduct('BandMerge', merge_params, sources)
 
+# --- Additional SNAP operators ---
 def ellipsoid_correction(product, proj='WGS84(DD)'):
     params = HashMap()
     params.put('sourceBands', ",".join(product.getBandNames()))
@@ -68,12 +97,10 @@ def ellipsoid_correction(product, proj='WGS84(DD)'):
     return GPF.createProduct('Ellipsoid-Correction-GG', params, product)
 
 def apply_land_sea_mask(product):
-    HashMapType = jpy.get_type('java.util.HashMap')
-    JInteger    = jpy.get_type('java.lang.Integer')
-    params = HashMapType()
+    params = HashMap()
     params.put('landMask', True)
     params.put('useSRTM', True)
-    params.put('shorelineExtension', JInteger(4))
+    params.put('shorelineExtension', jpy.get_type('java.lang.Integer')(4))
     return GPF.createProduct('Land-Sea-Mask', params, product)
 
 def subset_to_aoi(product, wkt_string):
@@ -105,64 +132,36 @@ def reorder_bands_explicitly(product, order):
         tgt.setRasterData(ras)
     return new
 
-# --- Combined Mask Function with correct meter conversion ---
-def mask_with_shapefile_and_5km(raster_path, shapefile_path,
-                                 distance_threshold, output_path):
-    # Bay mask for excluding inside bay
+def mask_with_shapefile_and_5km(raster_path, shapefile_path, distance_threshold, output_path):
     bay_gdf = gpd.read_file(shapefile_path).to_crs(epsg=4326)
-
     with rasterio.open(raster_path) as src:
         meta   = src.meta.copy()
         data   = src.read().astype('float32')
         nodata = src.nodata if src.nodata is not None else np.nan
-
-        # Convert zeros to nodata
         data[data == 0] = nodata
-
-        # Compute water mask (non-nan pixels)
         water_mask = ~np.isnan(data[0])
-
-        # Distance in pixels to nearest land (nan)
         dist_pix = distance_transform_edt(water_mask)
-
-        # Approximate pixel size in meters by converting degrees to meters at mid-latitude
-        bounds = src.bounds  # left, bottom, right, top in lon/lat
+        bounds = src.bounds
         mid_lat = (bounds.top + bounds.bottom) / 2.0
-        # meters per degree longitude at mid-latitude
         m_per_deg = 111320 * abs(math.cos(math.radians(mid_lat)))
         pix_deg  = abs(src.transform.a)
         pix_m    = pix_deg * m_per_deg
-
         dist_m = dist_pix * pix_m
-
-        # Debug prints
         print(f"[DEBUG] Pixel size: {pix_deg:.6f}° ≈ {pix_m:.2f} m")
         print(f"[DEBUG] Distances (m) > min {np.nanmin(dist_m):.2f}, max {np.nanmax(dist_m):.2f}")
-
-        # Mask inside bay polygon → nodata
-        mask_bay = features.geometry_mask(
-            [geom for geom in bay_gdf.geometry],
-            out_shape=(src.height, src.width),
-            transform=src.transform,
-            invert=True
-        )
+        mask_bay = features.geometry_mask(bay_gdf.geometry, out_shape=(src.height, src.width), transform=src.transform, invert=True)
         data[:, mask_bay] = nodata
-
-        # Mask out beyond threshold → nodata
         far_mask = dist_m > distance_threshold
         data[:, far_mask] = nodata
-
         meta.update(dtype=rasterio.float32, nodata=nodata)
-
     with rasterio.open(output_path, 'w', **meta) as dst:
         dst.write(data)
-
     print(f"Saved masked & distance-clipped raster to: {output_path}")
 
-# --- Scene Processing ---
 def write_product(prod, path, fmt='GeoTIFF'):
     ProductIO.writeProduct(prod, path, fmt)
 
+# --- Scene processing function ---
 def process_scene(inp, outp):
     basename = os.path.splitext(os.path.basename(inp))[0]
     print(f"Processing: {basename}")
@@ -179,27 +178,40 @@ def process_scene(inp, outp):
     tmp = '/tmp/temp_sar.tif'
     write_product(p7, tmp)
     mask_with_shapefile_and_5km(tmp, shapefile_path, distance_threshold, outp)
+    if os.path.exists(tmp):
+        os.remove(tmp)
 
-    if os.path.exists(tmp): os.remove(tmp)
-
-# --- Main ---
+# --- Main entrypoint ---
 if __name__ == '__main__':
-    initialize_snap()
-    os.makedirs(output_folder, exist_ok=True)
-    zip_files = [f for f in os.listdir(input_folder)
-                if f.endswith('.zip') and not f.startswith('._')]
-    print(f"Found {len(zip_files)} zip files")
-    for fname in zip_files:
-        inp = os.path.join(input_folder, fname)
-        out = os.path.join(
-            output_folder,
-            os.path.splitext(fname)[0] + '_pre.tif'
-        )
+    args = sys.argv[1:]
+    if len(args) == 0:
+        zip_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith('.zip') and not f.startswith('._')]
+        print(f"Found {len(zip_files)} zip files to process")
+        for inp in zip_files:
+            if not zipfile.is_zipfile(inp):
+                print(f"Skipping invalid zip: {inp}")
+                continue
+            print(f"Spawning process for: {inp}")
+            subprocess.call([sys.executable, __file__, inp])
+        print("Batch complete")
+        sys.exit(0)
+    elif len(args) == 1:
+        inp = args[0]
+        if not zipfile.is_zipfile(inp):
+            print(f"Invalid zip file: {inp}")
+            sys.exit(1)
+        os.makedirs(output_folder, exist_ok=True)
+        outp = os.path.join(output_folder, os.path.splitext(os.path.basename(inp))[0] + '_pre.tif')
+        initialize_snap()
         try:
-            process_scene(inp, out)
+            process_scene(inp, outp)
         except Exception as e:
-            print(f"Error processing {fname}: {e}")
-    print("All done!")
+            print(f"Error processing {inp}: {e}")
+            sys.exit(1)
+    else:
+        print("Usage: python batch_preprocess.py [<path_to_scene_zip>]")
+        sys.exit(1)
+
 
 
 print("◝(ᵔᗜᵔ)◜ done!! yayy!!")
