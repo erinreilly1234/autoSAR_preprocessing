@@ -1,3 +1,5 @@
+### RUN IN SNAPPY ENV
+
 from esa_snappy import ProductIO, GPF, HashMap, jpy, ProductUtils
 import os
 import math
@@ -9,10 +11,10 @@ from scipy.ndimage import distance_transform_edt
 
 # --- Configuration ---
 input_folder       = '/Volumes/External/TJ_SAR/01_data/02_2025_2020'
-output_folder      = '/Volumes/External/TJ_SAR/02_preprocessed/02_20202025'
+output_folder      = '/Volumes/External/TJ_SAR/02_preprocessed/TJNERR_20202025'
 shapefile_path     = '/Volumes/External/TJ_SAR/01_data/shapefiles/SanDiegoBay.shp'
-wkt = "POLYGON ((-117.210388 32.379961, -117.059326 32.379961, -117.059326 32.640531, -117.210388 32.640531, -117.210388 32.379961)))"
-distance_threshold = 5000  # meters from any shoreline
+wkt = "POLYGON ((-117.16198 32.503682, -117.117004 32.503682, -117.117004 32.584717, -117.16198 32.584717, -117.16198 32.503682))"
+distance_threshold = 4000  # meters from any shoreline
 
 # --- SNAP Workflow ---
 def initialize_snap():
