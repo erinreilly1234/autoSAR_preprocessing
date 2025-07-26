@@ -29,13 +29,18 @@ except Exception:
     pass
 
 # --- Configuration ---
-input_folder       = '/Volumes/External/TJ_SAR/01_data/02_2025_2020'
-output_folder      = '/Volumes/External/TJ_SAR/02_preprocessed/PB_20222025'
+input_folder       = '//Volumes/External/TJ_SAR/01_data/01_JunethroughDec'
+output_folder      = '/Volumes/External/TJ_SAR/02_preprocessed/background_gooddays'
 shapefile_path     = '/Volumes/External/TJ_SAR/01_data/shapefiles/SanDiegoBay.shp'
 wkt = (
-    "POLYGON ((-117.15889 32.376482, -117.078552 32.376482, -117.078552 32.503971, -117.15889 32.503971, -117.15889 32.376482)))"
+    "POLYGON ((-117.457581 32.268555, -117.007141 32.268555, -117.007141 32.724909, -117.457581 32.724909, -117.457581 32.268555)))"
 )
 distance_threshold = 4000  # meters from any shoreline
+
+# -----------------------------------------------------------------------------
+# GLOBAL SWITCH: set to False to skip distance-based masking entirely
+apply_distance_mask = False
+# -----------------------------------------------------------------------------
 
 # --- SNAP Workflow ---
 def initialize_snap():
@@ -79,6 +84,7 @@ def add_incang_band(product):
     params.put('targetBands', band_array)
     params.put('retainExistingBands', False)
     incang = GPF.createProduct('BandMaths', params, product)
+
     merge_params = HashMapType()
     merge_params.put('sourceProductNames', 'master,slave')
     merge_params.put('resamplingMethod', 'NEAREST_NEIGHBOUR')
@@ -133,30 +139,52 @@ def reorder_bands_explicitly(product, order):
     return new
 
 def mask_with_shapefile_and_5km(raster_path, shapefile_path, distance_threshold, output_path):
+    global apply_distance_mask
+
     bay_gdf = gpd.read_file(shapefile_path).to_crs(epsg=4326)
     with rasterio.open(raster_path) as src:
         meta   = src.meta.copy()
         data   = src.read().astype('float32')
         nodata = src.nodata if src.nodata is not None else np.nan
         data[data == 0] = nodata
+
+        # compute distance-from-water mask
         water_mask = ~np.isnan(data[0])
         dist_pix = distance_transform_edt(water_mask)
-        bounds = src.bounds
-        mid_lat = (bounds.top + bounds.bottom) / 2.0
-        m_per_deg = 111320 * abs(math.cos(math.radians(mid_lat)))
+
+        # convert pixels to meters
+        bounds   = src.bounds
+        mid_lat  = (bounds.top + bounds.bottom) / 2.0
+        m_per_deg= 111320 * abs(math.cos(math.radians(mid_lat)))
         pix_deg  = abs(src.transform.a)
         pix_m    = pix_deg * m_per_deg
-        dist_m = dist_pix * pix_m
+        dist_m   = dist_pix * pix_m
+
         print(f"[DEBUG] Pixel size: {pix_deg:.6f}° ≈ {pix_m:.2f} m")
-        print(f"[DEBUG] Distances (m) > min {np.nanmin(dist_m):.2f}, max {np.nanmax(dist_m):.2f}")
-        mask_bay = features.geometry_mask(bay_gdf.geometry, out_shape=(src.height, src.width), transform=src.transform, invert=True)
+        print(f"[DEBUG] Distance range: {np.nanmin(dist_m):.2f} m – {np.nanmax(dist_m):.2f} m")
+
+        # mask outside bay polygon
+        mask_bay = features.geometry_mask(
+            bay_gdf.geometry,
+            out_shape=(src.height, src.width),
+            transform=src.transform,
+            invert=True
+        )
         data[:, mask_bay] = nodata
-        far_mask = dist_m > distance_threshold
-        data[:, far_mask] = nodata
+
+        # optional distance-based mask
+        if apply_distance_mask:
+            far_mask = dist_m > distance_threshold
+            data[:, far_mask] = nodata
+        else:
+            print(f"[INFO] Skipping distance-based clipping (> {distance_threshold} m)")
+
         meta.update(dtype=rasterio.float32, nodata=nodata)
+
     with rasterio.open(output_path, 'w', **meta) as dst:
         dst.write(data)
-    print(f"Saved masked & distance-clipped raster to: {output_path}")
+
+    print(f"Saved masked & (optionally) distance-clipped raster to: {output_path}")
 
 def write_product(prod, path, fmt='GeoTIFF'):
     ProductIO.writeProduct(prod, path, fmt)
@@ -165,6 +193,7 @@ def write_product(prod, path, fmt='GeoTIFF'):
 def process_scene(inp, outp):
     basename = os.path.splitext(os.path.basename(inp))[0]
     print(f"Processing: {basename}")
+
     p0 = load_product(inp)
     p1 = calibrate_product(p0)
     ProductUtils.copyTiePointGrids(p0, p1)
@@ -185,7 +214,11 @@ def process_scene(inp, outp):
 if __name__ == '__main__':
     args = sys.argv[1:]
     if len(args) == 0:
-        zip_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith('.zip') and not f.startswith('._')]
+        zip_files = [
+            os.path.join(input_folder, f)
+            for f in os.listdir(input_folder)
+            if f.endswith('.zip') and not f.startswith('._')
+        ]
         print(f"Found {len(zip_files)} zip files to process")
         for inp in zip_files:
             if not zipfile.is_zipfile(inp):
@@ -195,23 +228,26 @@ if __name__ == '__main__':
             subprocess.call([sys.executable, __file__, inp])
         print("Batch complete")
         sys.exit(0)
+
     elif len(args) == 1:
         inp = args[0]
         if not zipfile.is_zipfile(inp):
             print(f"Invalid zip file: {inp}")
             sys.exit(1)
         os.makedirs(output_folder, exist_ok=True)
-        outp = os.path.join(output_folder, os.path.splitext(os.path.basename(inp))[0] + '_pre.tif')
+        outp = os.path.join(
+            output_folder,
+            os.path.splitext(os.path.basename(inp))[0] + '_pre.tif'
+        )
         initialize_snap()
         try:
             process_scene(inp, outp)
         except Exception as e:
             print(f"Error processing {inp}: {e}")
             sys.exit(1)
+
     else:
         print("Usage: python batch_preprocess.py [<path_to_scene_zip>]")
         sys.exit(1)
-
-
 
 print("◝(ᵔᗜᵔ)◜ done!! yayy!!")
