@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Process Sentinel-1 SAR scenes using SNAP (snappy) with JVM heap tuning.
 Supports two modes:
@@ -17,6 +16,23 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 import zipfile
 
+
+# --- Configuration ---
+input_folder       = '/Volumes/External/TJ_SAR/01_data/test_data'
+output_folder      = '/Volumes/External/TJ_SAR/01_data/test_output'
+shapefile_path     = '/Volumes/External/TJ_SAR/01_data/shapefiles/SanDiegoBay.shp'
+wkt = (
+    "POLYGON ((-117.457581 32.268555, -117.007141 32.268555, -117.007141 32.724909, -117.457581 32.724909, -117.457581 32.268555)))"
+)
+distance_threshold = 4000  # meters from any shoreline
+
+# -----------------------------------------------------------------------------
+# GLOBAL SWITCH: set to False to skip distance-based masking entirely
+apply_distance_mask = False
+apply_shapefile_mask = False
+# -----------------------------------------------------------------------------
+
+
 # --- JVM heap settings (must be before any SNAP imports) ---
 try:
     jpy.create_jvm([
@@ -27,21 +43,6 @@ try:
 except Exception:
     # JVM already started
     pass
-
-# --- Configuration ---
-input_folder       = '//Volumes/External/TJ_SAR/01_data/01_JunethroughDec'
-output_folder      = '/Volumes/External/TJ_SAR/02_preprocessed/background_gooddays'
-shapefile_path     = '/Volumes/External/TJ_SAR/01_data/shapefiles/SanDiegoBay.shp'
-wkt = (
-    "POLYGON ((-117.457581 32.268555, -117.007141 32.268555, -117.007141 32.724909, -117.457581 32.724909, -117.457581 32.268555)))"
-)
-distance_threshold = 4000  # meters from any shoreline
-
-# -----------------------------------------------------------------------------
-# GLOBAL SWITCH: set to False to skip distance-based masking entirely
-apply_distance_mask = False
-# -----------------------------------------------------------------------------
-
 # --- SNAP Workflow ---
 def initialize_snap():
     GPF.getDefaultInstance().getOperatorSpiRegistry().loadOperatorSpis()
@@ -139,9 +140,13 @@ def reorder_bands_explicitly(product, order):
     return new
 
 def mask_with_shapefile_and_5km(raster_path, shapefile_path, distance_threshold, output_path):
-    global apply_distance_mask
+    global apply_distance_mask, apply_shapefile_mask
 
-    bay_gdf = gpd.read_file(shapefile_path).to_crs(epsg=4326)
+    if apply_shapefile_mask:
+        bay_gdf = gpd.read_file(shapefile_path).to_crs(epsg=4326)
+    else:
+        print("[INFO] Skipping shapefile-based masking")
+
     with rasterio.open(raster_path) as src:
         meta   = src.meta.copy()
         data   = src.read().astype('float32')
@@ -163,14 +168,15 @@ def mask_with_shapefile_and_5km(raster_path, shapefile_path, distance_threshold,
         print(f"[DEBUG] Pixel size: {pix_deg:.6f}° ≈ {pix_m:.2f} m")
         print(f"[DEBUG] Distance range: {np.nanmin(dist_m):.2f} m – {np.nanmax(dist_m):.2f} m")
 
-        # mask outside bay polygon
-        mask_bay = features.geometry_mask(
-            bay_gdf.geometry,
-            out_shape=(src.height, src.width),
-            transform=src.transform,
-            invert=True
-        )
-        data[:, mask_bay] = nodata
+        # optional shapefile-based mask
+        if apply_shapefile_mask:
+            mask_bay = features.geometry_mask(
+                bay_gdf.geometry,
+                out_shape=(src.height, src.width),
+                transform=src.transform,
+                invert=True
+            )
+            data[:, mask_bay] = nodata
 
         # optional distance-based mask
         if apply_distance_mask:
@@ -227,6 +233,7 @@ if __name__ == '__main__':
             print(f"Spawning process for: {inp}")
             subprocess.call([sys.executable, __file__, inp])
         print("Batch complete")
+        print("◝(ᵔᗜᵔ)◜ done!! yayy!!")
         sys.exit(0)
 
     elif len(args) == 1:
@@ -249,5 +256,3 @@ if __name__ == '__main__':
     else:
         print("Usage: python batch_preprocess.py [<path_to_scene_zip>]")
         sys.exit(1)
-
-print("◝(ᵔᗜᵔ)◜ done!! yayy!!")
