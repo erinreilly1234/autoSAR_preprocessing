@@ -12,14 +12,14 @@ from rasterio.features import rasterize
 from shapely import wkt
 
 # --- Parameters: define input/output paths and algorithm settings ---
-input_folder = '/Volumes/External/TJ_SAR/03_oilClassification/ContrastRatio/TJ'
-output_folder = '/Volumes/External/TJ_SAR/04_iseg/TJ'
+input_folder = '/Volumes/External/test_autoSAR/output/ContrastRatio'
+output_folder = '/Volumes/External/test_autoSAR/output/final'
 wkt_aoi = (
     'POLYGON ((-117.171936 32.379961, -117.055206 32.379961,'
     ' -117.055206 32.638218, -117.171936 32.638218, -117.171936 32.379961))'
 )
 threshold_value = 0.11       # contrast ratio threshold for initial oil detection
-outfall_shapefile = '/Volumes/External/TJ_SAR/01_data/shapefiles/Outflow.shp'
+outfall_shapefile = '/Volumes/External/test_autoSAR/shapefile/Outflow.shp'
 decay_scale = 4000.0         # distance decay scale (meters)
 cluster_prob_threshold = 0.72  # minimum probability threshold for cluster acceptance
 

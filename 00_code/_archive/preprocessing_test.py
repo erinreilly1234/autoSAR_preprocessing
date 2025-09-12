@@ -1,3 +1,5 @@
+### RUN IN SNAPPY ENV
+
 from esa_snappy import ProductIO, GPF, HashMap, jpy, ProductUtils
 import os
 
@@ -136,12 +138,12 @@ def write_product(product, output_path, format='GeoTIFF'):
 def main():
     initialize_snap()
 
-    input_path = r'/Volumes/External/TJ_estuary/01_data/sentinel_1/01_JunethroughDec/S1A_IW_GRDH_1SDV_20240602T134457_20240602T134522_054145_069598_F5E2.zip'
+    input_path = r'/Volumes/External/TJ_SAR/01_data/02_2025_2020/S1A_IW_GRDH_1SDV_20221121T015015_20221121T015044_045986_0580C5_7D6E.zip'
 
     # Derive filename
     input_filename = os.path.basename(input_path)
     basename = os.path.splitext(input_filename)[0]
-    output_path = f"/Users/ereilly/Documents/code/autoSAR_preprocessing/test/output/{basename}_pre.tif"
+    output_path = f"/Volumes/External/TJ_SAR/02_preprocessed/TJNERR_20202025/{basename}_pre.tif"
 
     print("Loading product...")
     product = load_product(input_path)
@@ -163,7 +165,7 @@ def main():
     masked = apply_land_sea_mask(geocoded)
 
     print("Subsetting to AOI...")
-    wkt_aoi = "POLYGON ((-117.25708 32.314991, -117.04834 32.314991, -117.04834 32.655563, -117.25708 32.655563, -117.25708 32.314991))"
+    wkt_aoi = "POLYGON ((-117.16198 32.503682, -117.117004 32.503682, -117.117004 32.584717, -117.16198 32.584717, -117.16198 32.503682))"
     subset = subset_to_aoi(masked, wkt_aoi)
 
     print("Reordering bands...")

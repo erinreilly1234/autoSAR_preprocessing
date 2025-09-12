@@ -1,9 +1,12 @@
+### the script uses a fixed reference ENVI file to copy projection and geotransform information
+
 import os
 import argparse
 import numpy as np
 from spectral import open_image
 from osgeo import gdal, osr
 
+## reference should be georeferenced, can be output from damping ratio script
 REFERENCE_PATH = "/Users/ereilly/Documents/code/0619_lpass_iseg.tif"
 
 def convert_envi_to_geotiff(envi_hdr_path, output_tif_path):
@@ -23,12 +26,12 @@ def convert_envi_to_geotiff(envi_hdr_path, output_tif_path):
             out_ds.SetProjection(ref_ds.GetProjection())
             print(f"↪ Applied geotransform and projection from reference: {REFERENCE_PATH}")
         else:
-            print(f"⚠️ Failed to open reference file. Forcing WGS84 projection.")
+            print(f"Failed to open reference file. Forcing WGS84 projection.")
             srs = osr.SpatialReference()
             srs.ImportFromEPSG(4326)
             out_ds.SetProjection(srs.ExportToWkt())
     else:
-        print(f"⚠️ Reference file not found: {REFERENCE_PATH}")
+        print(f" Reference file not found: {REFERENCE_PATH}")
         srs = osr.SpatialReference()
         srs.ImportFromEPSG(4326)
         out_ds.SetProjection(srs.ExportToWkt())
@@ -48,7 +51,7 @@ def batch_convert(base_dir):
                 try:
                     convert_envi_to_geotiff(hdr_path, tif_out)
                 except Exception as e:
-                    print(f"⚠️ Failed to convert {hdr_path}: {e}")
+                    print(f" Failed to convert {hdr_path}: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Batch convert ENVI .dat/.hdr files to GeoTIFF with WGS84 projection")
