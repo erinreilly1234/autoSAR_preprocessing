@@ -1,0 +1,10 @@
+
+# macOS metadata
+._*
+.DS_Store
+
+# IDE settings
+.idea/
+
+# Virtual environments
+.venv/

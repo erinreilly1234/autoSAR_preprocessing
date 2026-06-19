@@ -18,9 +18,10 @@ import zipfile
 
 
 # --- Configuration ---
-input_folder       = '/Volumes/External/TJ_SAR/01_data/test_data'
-output_folder      = '/Volumes/External/TJ_SAR/01_data/test_output'
-shapefile_path     = '/Volumes/External/TJ_SAR/01_data/shapefiles/SanDiegoBay.shp'
+input_folder       = '/Volumes/External/TJ/010_rawdata/sentinel1'
+output_folder  = '/Volumes/External/TJ/preprocessed_3'
+shapefile_path = '/Volumes/External/TJ/015_shapefiles/shapefiles/SanDiegoBay.shp'
+
 wkt = (
     "POLYGON ((-117.457581 32.268555, -117.007141 32.268555, -117.007141 32.724909, -117.457581 32.724909, -117.457581 32.268555)))"
 )
@@ -29,7 +30,7 @@ distance_threshold = 4000  # meters from any shoreline
 # -----------------------------------------------------------------------------
 # GLOBAL SWITCH: set to False to skip distance-based masking entirely
 apply_distance_mask = False
-apply_shapefile_mask = False
+apply_shapefile_mask = True
 # -----------------------------------------------------------------------------
 
 
@@ -206,11 +207,20 @@ def process_scene(inp, outp):
     p2 = apply_multilook(p1)
     p3 = add_incang_band(p2)
     p4 = ellipsoid_correction(p3)
-    p5 = apply_land_sea_mask(p4)
-    p6 = subset_to_aoi(p5, wkt)
+    p5 = subset_to_aoi(p4, wkt)
+    p6 = apply_land_sea_mask(p5)
     p7 = reorder_bands_explicitly(p6, ['Sigma0_VV', 'incang'])
 
-    tmp = '/tmp/temp_sar.tif'
+
+    w = p6.getSceneRasterWidth()
+    h = p6.getSceneRasterHeight()
+    print(f"[DEBUG] subset size: {w} x {h}")
+
+    if w <= 0 or h <= 0:
+        print(f"[SKIP] Empty subset for {basename}")
+        return
+
+    tmp = os.path.join(output_folder, basename + '_temp_sar.tif')
     write_product(p7, tmp)
     mask_with_shapefile_and_5km(tmp, shapefile_path, distance_threshold, outp)
     if os.path.exists(tmp):
@@ -227,11 +237,24 @@ if __name__ == '__main__':
         ]
         print(f"Found {len(zip_files)} zip files to process")
         for inp in zip_files:
+            basename = os.path.splitext(os.path.basename(inp))[0]
+            outp = os.path.join(output_folder, basename + '_pre.tif')
+
+            if os.path.exists(outp):
+                print(f"[SKIP] Output already exists: {outp}")
+                continue
+
             if not zipfile.is_zipfile(inp):
                 print(f"Skipping invalid zip: {inp}")
                 continue
+
             print(f"Spawning process for: {inp}")
-            subprocess.call([sys.executable, __file__, inp])
+            ret = subprocess.call([sys.executable, __file__, inp])
+
+            if ret != 0:
+                print(f"[FAILED] {inp}")
+            else:
+                print(f"[SUCCESS] {inp}")
         print("Batch complete")
         print("◝(ᵔᗜᵔ)◜ done!! yayy!!")
         sys.exit(0)
