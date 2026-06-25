@@ -18,8 +18,8 @@ import zipfile
 
 
 # --- Configuration ---
-input_folder       = '/Volumes/External/TJ/010_rawdata/sentinel1'
-output_folder  = '/Volumes/External/TJ/preprocessed_3'
+input_folder       = '/Users/ereilly/Documents/autoSAR/01_rawdata'
+output_folder  = '/Users/ereilly/Documents/autoSAR/02_preprocessed'
 shapefile_path = '/Volumes/External/TJ/015_shapefiles/shapefiles/SanDiegoBay.shp'
 
 wkt = (
@@ -29,8 +29,9 @@ distance_threshold = 4000  # meters from any shoreline
 
 # -----------------------------------------------------------------------------
 # GLOBAL SWITCH: set to False to skip distance-based masking entirely
+apply_wkt_clip = False
 apply_distance_mask = False
-apply_shapefile_mask = True
+apply_shapefile_mask = False
 # -----------------------------------------------------------------------------
 
 
@@ -207,7 +208,14 @@ def process_scene(inp, outp):
     p2 = apply_multilook(p1)
     p3 = add_incang_band(p2)
     p4 = ellipsoid_correction(p3)
-    p5 = subset_to_aoi(p4, wkt)
+
+    if apply_wkt_clip:
+        print(f"[INFO] Clipping wkt to: {wkt}")
+        p5 = subset_to_aoi(p4, wkt)
+    else:
+        print("[INFO] Skipping wkt clipping")
+        p5 = p4
+
     p6 = apply_land_sea_mask(p5)
     p7 = reorder_bands_explicitly(p6, ['Sigma0_VV', 'incang'])
 
