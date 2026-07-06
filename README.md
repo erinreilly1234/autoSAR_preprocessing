@@ -390,6 +390,12 @@ Python version note: the repository install notes say the code was tested on an 
 
 ### 9.1 Create a clean `RS` environment
 
+
+If Python 3.11 is not installed, install it first:
+
+```bash
+brew install python@3.11
+```
 Open Terminal and run:
 
 ```bash
@@ -405,11 +411,7 @@ which python
 python -m pip --version
 ```
 
-If Python 3.11 is not installed, install it first:
 
-```bash
-brew install python@3.11
-```
 
 Expected result:
 
@@ -461,21 +463,13 @@ python -m pip install --no-cache-dir --force-reinstall "GDAL==$GDAL_VERSION"
 
 Important: Do not paste `brew install`, `GDAL_VERSION`, and `pip install` onto one command line.
 
-### 9.4 Install the local `OilClassification` package
-
-This lets Python import `OilClassification` from anywhere, including PyCharm run configurations.
-
-```bash
-cd ~/Documents/auto_SAR_Ocean_Contrast
-python -m pip install -e . --no-deps
-```
 
 ### 9.5 Test the `RS` environment
 
 Run this test from Terminal while the `RS` environment is active:
 
 ```bash
-python -c "import numpy, matplotlib, netCDF4, yaml, spectral, scipy, skimage; from osgeo import gdal; import OilClassification.io as io; print('Ocean Contrast environment works'); print(gdal.VersionInfo())"
+python -c "import numpy, matplotlib, netCDF4, yaml, spectral, scipy, skimage; from osgeo import gdal; print('Ocean Contrast environment works'); print(gdal.VersionInfo())"
 ```
 
 If the command prints `Ocean Contrast environment works` and a GDAL version number, the packages are installed in the correct environment.
@@ -536,30 +530,23 @@ For the GeoTIFF Ocean Contrast workflow, use the repository configuration file n
 ```text
 config-geotiff-unmasked.yaml
 ```
+located here "auto_SAR_Ocean_Contrast/prototypes/config-geotiff-unmasked.yaml"
 
-Copy this file into the **main directory** of the Ocean Contrast repository:
 
-```text
-/Users/ereilly/Documents/auto_SAR_Ocean_Contrast
-```
+Then copy it into the main repository directory. 
 
-In Terminal, from the repository root, you can search for the file first:
+and rename as only config.yaml (remove 'geotiff-unmasked' from file name)
 
-```bash
-cd ~/Documents/auto_SAR_Ocean_Contrast
-find . -name "config-geotiff-unmasked.yaml"
-```
+should be like this
 
-Then copy it into the main repository directory. Replace the source path below with the path printed by `find`:
+"auto_SAR_Ocean_Contrast/config.yaml"
 
-```bash
-cp path/to/config-geotiff-unmasked.yaml ./config-geotiff-unmasked.yaml
 ```
 
 In PyCharm, open the copied file:
 
 ```text
-/Users/ereilly/Documents/auto_SAR_Ocean_Contrast/config-geotiff-unmasked.yaml
+/Users/ereilly/Documents/auto_SAR_Ocean_Contrast/config.yaml
 ```
 
 Update the fields so they match the input files and output folder on the current computer. For the unmasked GeoTIFF workflow, set `uselandmask` to `False`. Since the land mask is turned off, the `maskfile` field is not used.
@@ -596,38 +583,21 @@ output:
   outdir  : Output
 ```
 
-The `infiles` path can be a relative path, as shown above, if your repository contains this folder:
-
-```text
-/Users/ereilly/Documents/auto_SAR_Ocean_Contrast/Input/
-```
 
 For example, this pattern:
 
+use the * as a wildcard to accept all filenames that end with '.tif'
+
 ```yaml
-infiles: 'Input/1_subset_*_EC.tif'
+infiles: '/Users/ereilly/Documents/preprocessed/*.tif'
 ```
 
 will look for files such as:
 
 ```text
-Input/1_subset_example_EC.tif
+/Users/ereilly/Documents/preprocessed/1_subset_example_EC.tif
 ```
 
-If the input files are somewhere else on the computer, use the full path instead:
-
-```yaml
-infiles: '/Users/ereilly/Documents/your_input_folder/1_subset_*_EC.tif'
-```
-
-Make sure the output folder exists before running:
-
-```bash
-cd ~/Documents/auto_SAR_Ocean_Contrast
-mkdir -p Input Output
-```
-
-Then copy the GeoTIFF input files into the `Input` folder, or update `infiles` to point to the folder where they already are.
 
 ### 10.4 Make a PyCharm Run Configuration
 
