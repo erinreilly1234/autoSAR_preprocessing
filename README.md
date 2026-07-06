@@ -329,10 +329,7 @@ If the repository has a README or config file, check it before running so your i
 
 In the Project panel on the left, open the `autoSAR_preprocessing` folder and look for:
 
-- the main script,
-- a `scripts` folder,
-- a README file,
-- or instructions from the repository.
+00_code/01_batch_preprocess.py
 
 ### 8.2 Run the file
 
