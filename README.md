@@ -1,8 +1,4 @@
-[autoSAR_instructions_next_steps_with_ocean_contrast.md](https://github.com/user-attachments/files/29713713/autoSAR_instructions_next_steps_with_ocean_contrast.md)
 # AutoSAR Setup Instructions
-
-**Date:** 6/23/26  
-**Purpose:** Set up Git, Homebrew, ESA SNAP/`esa_snappy`, the AutoSAR preprocessing repository, and the `auto_SAR_Ocean_Contrast` repository. This guide also includes PyCharm setup, Ocean Contrast package requirements, and troubleshooting notes from the problems encountered during setup.
 
 ---
 
@@ -534,20 +530,105 @@ python --version
 python -c "from osgeo import gdal; import OilClassification.io as io; print('works')"
 ```
 
-### 10.3 Prepare the case folder and `config.yaml`
+### 10.3 Copy and edit the GeoTIFF configuration file
 
-The Ocean Contrast script expects a case directory. That case directory must contain a `config.yaml` file. The repository has prototype `config.yaml` files that can be copied, edited, and renamed to `config.yaml`.
-
-Example layout:
+For the GeoTIFF Ocean Contrast workflow, use the repository configuration file named:
 
 ```text
-/Users/ereilly/Documents/ocean_contrast_cases/my_case/
-    config.yaml
-    input_files/
-    output/
+config-geotiff-unmasked.yaml
 ```
 
-Use full paths in `config.yaml` where possible. Check capitalization and folder names carefully.
+Copy this file into the **main directory** of the Ocean Contrast repository:
+
+```text
+/Users/ereilly/Documents/auto_SAR_Ocean_Contrast
+```
+
+In Terminal, from the repository root, you can search for the file first:
+
+```bash
+cd ~/Documents/auto_SAR_Ocean_Contrast
+find . -name "config-geotiff-unmasked.yaml"
+```
+
+Then copy it into the main repository directory. Replace the source path below with the path printed by `find`:
+
+```bash
+cp path/to/config-geotiff-unmasked.yaml ./config-geotiff-unmasked.yaml
+```
+
+In PyCharm, open the copied file:
+
+```text
+/Users/ereilly/Documents/auto_SAR_Ocean_Contrast/config-geotiff-unmasked.yaml
+```
+
+Update the fields so they match the input files and output folder on the current computer. For the unmasked GeoTIFF workflow, set `uselandmask` to `False`. Since the land mask is turned off, the `maskfile` field is not used.
+
+Example configuration:
+
+```yaml
+# Configuration file for auto_calc_contrast_in_ocean python code
+
+input:
+  format     : geotiff
+  infiles    : 'Input/1_subset_*_EC.tif' # input file glob or filename
+
+  indeg      : True
+  indb       : False
+
+  uselandmask   : False
+  maskfile      : '' # not used when uselandmask is False
+
+process: # Clean sea pixel ID processing options
+  incangbinsize : 1            # [deg] For incidence angle binning to get clean
+                               # sea pixels from the PDF of the values in
+                               # infiles
+  setinclolim   : False
+  setinchilim   : False
+  inclolim      : 30           # [deg]
+  inchilim      : 58           # [deg]
+  bootstrap     : False        # Use solution from last angle bin for current bin
+
+  polarization  : VV
+
+output:
+  format  : geotiff
+  outdir  : Output
+```
+
+The `infiles` path can be a relative path, as shown above, if your repository contains this folder:
+
+```text
+/Users/ereilly/Documents/auto_SAR_Ocean_Contrast/Input/
+```
+
+For example, this pattern:
+
+```yaml
+infiles: 'Input/1_subset_*_EC.tif'
+```
+
+will look for files such as:
+
+```text
+Input/1_subset_example_EC.tif
+```
+
+If the input files are somewhere else on the computer, use the full path instead:
+
+```yaml
+infiles: '/Users/ereilly/Documents/your_input_folder/1_subset_*_EC.tif'
+```
+
+Make sure the output folder exists before running:
+
+```bash
+cd ~/Documents/auto_SAR_Ocean_Contrast
+mkdir -p Input Output
+```
+
+Then copy the GeoTIFF input files into the `Input` folder, or update `infiles` to point to the folder where they already are.
 
 ### 10.4 Make a PyCharm Run Configuration
 
@@ -570,7 +651,7 @@ Working directory:
 /Users/ereilly/Documents/auto_SAR_Ocean_Contrast
 
 Parameters:
-/Users/ereilly/Documents/ocean_contrast_cases/my_case
+/Users/ereilly/Documents/auto_SAR_Ocean_Contrast/config-geotiff-unmasked.yaml
 ```
 
 Script choice: If the repository instructions or your advisor specify `auto_calc_contrast_in_ocean.py` instead of `auto_calc_contrast_in_ocean_all_formats.py`, use that file as the Script path. The setup and package requirements are the same.
@@ -585,12 +666,12 @@ Debug options:
 For example:
 
 ```text
-/Users/ereilly/Documents/ocean_contrast_cases/my_case -d
+/Users/ereilly/Documents/auto_SAR_Ocean_Contrast/config-geotiff-unmasked.yaml -d
 ```
 
 ### 10.5 Run and check outputs
 
-Click the green Run button. Watch the Run window at the bottom of PyCharm. When the run finishes, check the output directory listed in `config.yaml`.
+Click the green Run button. Watch the Run window at the bottom of PyCharm. When the run finishes, check the output directory listed in `config-geotiff-unmasked.yaml`, usually the `Output` folder.
 
 ---
 
@@ -815,8 +896,9 @@ python -m pip install "GDAL==$GDAL_VERSION"
 /Users/ereilly/Documents/auto_SAR_Ocean_Contrast
 ```
 
-- Parameters points to a case folder that contains `config.yaml`.
-- Input and output paths in `config.yaml` are full paths and are spelled exactly correctly.
+- Parameters points to the copied `config-geotiff-unmasked.yaml` file, or to the location expected by the script version you are using.
+- The `infiles` and `outdir` paths in `config-geotiff-unmasked.yaml` are spelled exactly correctly.
+- `uselandmask` is set to `False` for the unmasked GeoTIFF workflow.
 
 ---
 
