@@ -23,19 +23,13 @@ Create an account at GitHub if you do not already have one.
 Run the following commands, replacing the name and email with your own GitHub information:
 
 ```bash
-git config --global user.name "Your Name"
+git config --global user.name "Your Username"
 git config --global user.email "your.email@example.com"
 git config --global --list
 ```
 
 Confirm that the name and email you entered are listed.
 
-Example:
-
-```bash
-git config --global user.name "testusername"
-git config --global user.email "test@gmail.com"
-git config --global --list
 ```
 
 Expected output should include something like:
