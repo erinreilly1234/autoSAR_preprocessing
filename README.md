@@ -33,16 +33,16 @@ Confirm that the name and email you entered are listed.
 Example:
 
 ```bash
-git config --global user.name "erinreilly1234"
-git config --global user.email "reillymerin@gmail.com"
+git config --global user.name "testusername"
+git config --global user.email "test@gmail.com"
 git config --global --list
 ```
 
 Expected output should include something like:
 
 ```text
-user.name=erinreilly1234
-user.email=reillymerin@gmail.com
+user.name=testusername
+user.email=test@gmail.com
 ```
 
 ---
