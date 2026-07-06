@@ -339,6 +339,8 @@ Right-click inside the Python file and choose **Run**. You can also use the gree
 
 update :
 
+```text
+
 input_folder       = '/Users/ereilly/Documents/autoSAR/01_rawdata'
 output_folder  = '/Users/ereilly/Documents/autoSAR/02_preprocessed'
 shapefile_path = '/Volumes/External/TJ/015_shapefiles/shapefiles/SanDiegoBay.shp'
@@ -354,11 +356,14 @@ apply_wkt_clip = False
 apply_distance_mask = False
 apply_shapefile_mask = False
 
+```
+
 to where your input folder is. 
 
 update the shapefile only if you plan on masking your image. update wkt if you want to subset your image. 
 
 update switchs to apply_wkt_clip, apply_distance_mask, and apply_shapefile_mask if using.
+
 
 
 ### 8.4 Watch the Run window
