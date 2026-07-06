@@ -378,11 +378,7 @@ Start this section after both repositories have been cloned.
 
 Use this `RS` environment for the Ocean Contrast script. Keep using `esa_snap_312` for SNAP/preprocessing work.
 
-Important: Do **not** use the Conda `base` environment for this part. If your prompt starts with `(base)`, run:
-
-```bash
-conda deactivate
-```
+If you are on a NASA supplied computer, do not use conda. If not, you can create environments using conda and it's likely easier.
 
 Why a separate environment is needed:
 
