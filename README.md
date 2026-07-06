@@ -335,30 +335,31 @@ In the Project panel on the left, open the `autoSAR_preprocessing` folder and lo
 
 Right-click inside the Python file and choose **Run**. You can also use the green Run button at the top of PyCharm.
 
-### 8.3 Add input arguments, if needed
+### 8.3 Update Input arguments
 
-If the script needs command-line input arguments, make a Run Configuration:
+update :
 
-```text
-Run > Edit Configurations...
-```
+input_folder       = '/Users/ereilly/Documents/autoSAR/01_rawdata'
+output_folder  = '/Users/ereilly/Documents/autoSAR/02_preprocessed'
+shapefile_path = '/Volumes/External/TJ/015_shapefiles/shapefiles/SanDiegoBay.shp'
 
-Set the configuration like this:
+wkt = (
+    "POLYGON ((-117.457581 32.268555, -117.007141 32.268555, -117.007141 32.724909, -117.457581 32.724909, -117.457581 32.268555)))"
+)
+distance_threshold = 4000  # meters from any shoreline
 
-```text
-Script path: choose the .py file you want to run
-Python interpreter: /Users/ereilly/venvs/esa_snap_312/bin/python
-Working directory: /Users/ereilly/Documents/autoSAR_preprocessing
-Parameters: add any required input/output arguments
-```
+# -----------------------------------------------------------------------------
+# GLOBAL SWITCH: set to False to skip distance-based masking entirely
+apply_wkt_clip = False
+apply_distance_mask = False
+apply_shapefile_mask = False
 
-Example parameters, only if the script uses command-line arguments:
+to where your input folder is. 
 
-```text
---input "/Users/ereilly/Documents/ASF_downloads" --output "/Users/ereilly/Documents/autoSAR_outputs"
-```
+update the shapefile only if you plan on masking your image. update wkt if you want to subset your image. 
 
-If the script does not use command-line arguments, leave Parameters blank and set paths directly in the code or config file.
+update switchs to apply_wkt_clip, apply_distance_mask, and apply_shapefile_mask if using.
+
 
 ### 8.4 Watch the Run window
 
