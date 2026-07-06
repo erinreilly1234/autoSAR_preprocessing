@@ -601,6 +601,14 @@ will look for files such as:
 
 ### 10.4 Make a PyCharm Run Configuration
 
+You can run the script from the terminal with something like this 
+
+cd /Volumes/External/TJ_estuary/2025_autoSAR/auto_SAR_Ocean_Contrast_ER/
+
+python auto_calc_contrast_in_ocean_all_formats.py /Volumes/External/TJ_estuary/2025_autoSAR/auto_SAR_Ocean_Contrast_ER/
+
+OR ... and I've never done it like this, but interested to see if it works :
+
 Go to:
 
 ```text
@@ -623,8 +631,6 @@ Parameters:
 /Users/ereilly/Documents/auto_SAR_Ocean_Contrast/config-geotiff-unmasked.yaml
 ```
 
-Script choice: If the repository instructions or your advisor specify `auto_calc_contrast_in_ocean.py` instead of `auto_calc_contrast_in_ocean_all_formats.py`, use that file as the Script path. The setup and package requirements are the same.
-
 Debug options:
 
 ```text
@@ -646,6 +652,8 @@ Click the green Run button. Watch the Run window at the bottom of PyCharm. When 
 
 ## 11. Update Code and Fetch Git Tags Before Running
 
+if it fails on something about the JPL version tag then try this:
+
 The Ocean Contrast code builds a version label using:
 
 ```bash
@@ -657,35 +665,14 @@ If your clone has no tags, the script can fail with:
 ```text
 fatal: No names found, cannot describe anything.
 ```
+Try:
 
-Before a new run, update both repositories:
-
-```bash
-cd ~/Documents/autoSAR_preprocessing
-git pull
-
-cd ~/Documents/auto_SAR_Ocean_Contrast
-git pull
-```
-
-Then fetch tags for `auto_SAR_Ocean_Contrast`:
-
-```bash
-cd ~/Documents/auto_SAR_Ocean_Contrast
-git remote -v
-git fetch origin --tags
-git fetch https://github.com/nasa-jpl/auto_SAR_Ocean_Contrast.git --tags
-git tag
+```text
+git fetch --tags
 git describe --abbrev=0 --tags
 ```
 
 If `git describe` prints a tag number, the version-label problem is fixed.
-
-Also make sure the PyCharm Run Configuration working directory is the repository root:
-
-```text
-/Users/ereilly/Documents/auto_SAR_Ocean_Contrast
-```
 
 ---
 
