@@ -388,9 +388,6 @@ Open Terminal and run:
 ```bash
 cd ~/Documents
 
-# Only remove RS if it is broken or was created with the wrong Python version.
-rm -rf RS
-
 /opt/homebrew/bin/python3.11 -m venv RS
 source RS/bin/activate
 python --version
@@ -689,7 +686,7 @@ python -m pip install --upgrade pip setuptools wheel
 
 ### Problem 4: The prompt shows `(base)` instead of `(RS)`
 
-This means Conda is active. The Ocean Contrast setup in this guide should be run from the `RS` virtual environment, not Conda `base`.
+This means  is active. The Ocean Contrast setup in this guide should be run from the `RS` virtual environment, not Conda `base`.
 
 Fix:
 
