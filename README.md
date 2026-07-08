@@ -293,15 +293,8 @@ Use the folder where you saved the SAR images from ASF Vertex.
 Example input folder:
 
 ```text
-/Users/ereilly/Documents/ASF_downloads
-```
 
-### 7.2 Create an output folder
-
-In the PyCharm Terminal, run:
-
-```bash
-mkdir -p ~/Documents/autoSAR_outputs
+/Users/ereilly/Documents/autoSAR/01_rawdata
 ```
 
 ### 7.3 Use full paths in code or run configurations
@@ -309,8 +302,8 @@ mkdir -p ~/Documents/autoSAR_outputs
 Example paths:
 
 ```python
-input_folder = "/Users/ereilly/Documents/ASF_downloads"
-output_folder = "/Users/ereilly/Documents/autoSAR_outputs"
+input_folder = "/Users/ereilly/Documents/autoSAR/01_rawdata"
+output_folder = "/Users/ereilly/Documents/autoSAR/02_preprocessed"
 ```
 
 If the repository has a README or config file, check it before running so your input and output paths match what the script expects.
