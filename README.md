@@ -593,54 +593,14 @@ will look for files such as:
 ```
 
 
-### 10.4 Make a PyCharm Run Configuration
+### 10.4  Run and check outputs
 
 You can run the script from the terminal with something like this 
 
-cd /Volumes/External/TJ_estuary/2025_autoSAR/auto_SAR_Ocean_Contrast_ER/
+cd /Users/ereilly/Documents/auto_SAR_Ocean_Contrast/
+python auto_calc_contrast_in_ocean_all_formats.py /Users/ereilly/Documents/auto_SAR_Ocean_Contrast/
 
-python auto_calc_contrast_in_ocean_all_formats.py /Volumes/External/TJ_estuary/2025_autoSAR/auto_SAR_Ocean_Contrast_ER/
-
-OR ... and I've never done it like this, but interested to see if it works :
-
-Go to:
-
-```text
-Run > Edit Configurations...
-```
-
-Set the run configuration like this:
-
-```text
-Script path:
-/Users/ereilly/Documents/auto_SAR_Ocean_Contrast/auto_calc_contrast_in_ocean_all_formats.py
-
-Python interpreter:
-/Users/ereilly/Documents/RS/bin/python
-
-Working directory:
-/Users/ereilly/Documents/auto_SAR_Ocean_Contrast
-
-Parameters:
-/Users/ereilly/Documents/auto_SAR_Ocean_Contrast/config-geotiff-unmasked.yaml
-```
-
-Debug options:
-
-```text
--d    Print more details and save intermediate figures.
--I    Display figures interactively.
-```
-
-For example:
-
-```text
-/Users/ereilly/Documents/auto_SAR_Ocean_Contrast/config-geotiff-unmasked.yaml -d
-```
-
-### 10.5 Run and check outputs
-
-Click the green Run button. Watch the Run window at the bottom of PyCharm. When the run finishes, check the output directory listed in `config-geotiff-unmasked.yaml`, usually the `Output` folder.
+When the run finishes, check the output directory listed in `config.yaml`, usually the `Output` folder.
 
 ---
 
